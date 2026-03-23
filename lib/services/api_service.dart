@@ -21,7 +21,7 @@ class User {//blueprint to store user data
 class ApiService {
   static const String baseUrl = 'https://dummyjson.com/products';
   static const String usersUrl = 'https://dummyjson.com/users';
-
+  static const String loginUrl = 'https://dummyjson.com/auth/login';
   // Fetch products from the API
   static Future<List<ProductItem>> fetchProducts() async {
     try {
@@ -59,13 +59,32 @@ class ApiService {
           email: jsonData['email'] ?? 'N/A',
           firstName: jsonData['firstName'] ?? 'John',
           lastName: jsonData['lastName'] ?? 'Doe',
-          joinDate: DateTime(2020, 5, 15), // Example date
+          joinDate: DateTime(2020, 5, 15),
         );
       } else {
         throw Exception('Failed to load user');
       }
     } catch (e) {
       throw Exception('Error fetching user: $e');
+    }
+  }
+
+  // Login with username and password
+  static Future<bool> login(String username, String password) async {
+    try {
+      final response = await http.post(
+        Uri.parse(loginUrl),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'username': username, 'password': password}),
+      );
+
+      if (response.statusCode == 200) {
+        return true;
+      } else {
+        throw Exception('Login failed');
+      }
+    } catch (e) {
+      throw Exception('Error logging in: $e');
     }
   }
 }

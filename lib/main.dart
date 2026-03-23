@@ -2,70 +2,46 @@ import 'package:flutter/material.dart';
 import 'pages/home_page.dart';
 import 'pages/cart_page.dart';
 import 'pages/user_profile_page.dart';
+import 'pages/login_page.dart';
 import 'services/api_service.dart';
 
-void main() {
-  // Entry point of the application; as an on switch for a application
-  runApp(const MyApp());
-}
+void main() => runApp(const MyApp());
 
-class MyApp extends StatelessWidget { //doesnt hold data, just a blueprint 
-  const MyApp({super.key});//super.key passes key to the parent class(statelesswidget)
-
-  @override// to replacing method from a parent class
+class MyApp extends StatelessWidget {
+  const MyApp({super.key});
+  @override
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       theme: ThemeData(primarySwatch: Colors.blue),
-      home: RootPage(), // what the user sees first thing
+      home: const RootPage(),
     );
   }
 }
 
-class RootPage extends StatefulWidget {//hold data and logic for the app
-  //screen can be realoded with statefulwidget, not with stateless widget
-  const RootPage({
-    super.key,
-  }); //rootpage is the main widget itself , and _rootpagestate holds data and the build() method.
-
+class RootPage extends StatefulWidget {
+  const RootPage({super.key});
   @override
-  State<RootPage> createState() => _RootPageState();//create state to hold the data and logic 
+  State<RootPage> createState() => _RootPageState();
 }
 
 class _RootPageState extends State<RootPage> {
-  int currentPage = 0;
-  final List<ProductItem> _cartItems = [];
-  late Future<List<ProductItem>> _productsFuture; //late means the data will be initialized later
+  int _page = 0;
+  final _cart = <ProductItem>[];
+  late Future<List<ProductItem>> _products;
+  bool _loggedIn = false;
+  String _user = '';
 
   @override
   void initState() {
-    super.initState();//call parent class initstate
-    _productsFuture = ApiService.fetchProducts();
-  }
-
-  void _addToCart(ProductItem item) {
-    setState(() {
-      _cartItems.add(item);
-    });
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text('${item.name} added to cart')));
-  }
-
-  void _removeFromCart(int index) {
-    setState(() {
-      _cartItems.removeAt(index);
-    });
-  }
-
-  void _clearCart() {
-    setState(() {
-      _cartItems.clear();
-    });
+    super.initState();
+    _products = ApiService.fetchProducts();
   }
 
   @override
   Widget build(BuildContext context) {
+    if (!_loggedIn) return LoginPage(onLoginSuccess: (u) => setState(() { _loggedIn = true; _user = u; }));
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('My App'),
@@ -73,67 +49,43 @@ class _RootPageState extends State<RootPage> {
         actions: [
           IconButton(
             icon: const Icon(Icons.person),
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => const UserProfilePage()),
-              );
-            },
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => UserProfilePage(username: _user, onLogout: () => setState(() { _loggedIn = false; _user = ''; _cart.clear(); }))),
+            ),
           ),
         ],
       ),
-      body: FutureBuilder<List<ProductItem>>(//widget that builds itself based on a future state
-        future: _productsFuture,
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {//snapshot, contains data and state of the future; ConnectionState.waiting, while waiting for API response
-            return const Center(child: CircularProgressIndicator());
-          } else if (snapshot.hasError) {
-            return Center(
-              child: Text('Error: ${snapshot.error}'),
-            );
-          } else if (!snapshot.hasData || snapshot.data!.isEmpty) {
-            return const Center(child: Text('No products found'));
-          }
-
-          final products = snapshot.data!;//list of all products is fetched from the API
-
+      body: FutureBuilder<List<ProductItem>>(
+        future: _products,
+        builder: (_, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
+          if (snapshot.hasError) return Center(child: Text('Error: ${snapshot.error}'));
+          if (!snapshot.hasData || snapshot.data!.isEmpty) return const Center(child: Text('No products'));
+          final products = snapshot.data!;
           return IndexedStack(
-            index: currentPage,
+            index: _page,
             children: [
-              HomePage(items: products, onAddToCart: _addToCart),
-              CartPage(
-                cartItems: _cartItems,
-                onRemove: _removeFromCart,
-                onClearCart: _clearCart,
-              ),
+              HomePage(items: products, onAddToCart: (item) => setState(() { _cart.add(item); ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${item.name} added'))); })),
+              CartPage(cartItems: _cart, onRemove: (i) => setState(() => _cart.removeAt(i)), onClearCart: () => setState(_cart.clear)),
             ],
           );
         },
       ),
       floatingActionButton: FloatingActionButton(
-        onPressed: () {
-          debugPrint('Floating action button');
-        },
+        onPressed: () => ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Wishlist Created!'), backgroundColor: Colors.green)),
         child: const Icon(Icons.add),
       ),
       bottomNavigationBar: NavigationBar(
         destinations: [
-          NavigationDestination(icon: const Icon(Icons.home), label: 'Home'),
+          const NavigationDestination(icon: Icon(Icons.home), label: 'Home'),
           NavigationDestination(
-            icon: Badge(
-              isLabelVisible: _cartItems.isNotEmpty,
-              label: Text(_cartItems.length.toString()),
-              child: const Icon(Icons.shopping_cart),
-            ),
+            icon: Badge(isLabelVisible: _cart.isNotEmpty, label: Text(_cart.length.toString()), child: const Icon(Icons.shopping_cart)),
             label: 'Cart',
           ),
         ],
-        onDestinationSelected: (int index) {
-          setState(() {
-            currentPage = index;
-          });
-        },
-        selectedIndex: currentPage,
+        onDestinationSelected: (i) => setState(() => _page = i),
+        selectedIndex: _page,
       ),
     );
   }
